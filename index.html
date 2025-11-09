@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>A little surprise 💌</title>
 <style>
-  :root{
-    --bg1:#ffdde1; --bg2:#ee9ca7; --accent:#fff;
-  }
+  :root{ --bg1:#ffdde1; --bg2:#ee9ca7; --accent:#fff; }
   html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
   body{
     background: linear-gradient(135deg,var(--bg1),var(--bg2));
@@ -15,7 +13,6 @@
     padding:24px; overflow:hidden; color:#fff;
   }
 
-  /* Shared card style */
   .card{
     width:100%; max-width:720px; background:rgba(255,255,255,0.06);
     border-radius:18px; padding:36px; backdrop-filter: blur(6px);
@@ -43,9 +40,15 @@
 
   /* ---------- CONTENT (the surprise) ---------- */
   .content{ display:none; }
-
   h1{margin:0 0 8px;font-size:28px;letter-spacing:0.2px;}
   p.lead{margin:0 0 18px;opacity:0.95}
+
+  /* Countdown chip */
+  .countdown{
+    display:inline-block; padding:8px 14px; border-radius:999px;
+    background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25);
+    font-weight:600; margin:0 0 14px; letter-spacing:.3px;
+  }
 
   .stage{
     position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -71,8 +74,8 @@
   .flower:nth-child(4){animation-delay:.6s}
   @keyframes float{0%{transform:translateY(0) rotate(0)}50%{transform:translateY(-8px) rotate(6deg)}100%{transform:translateY(0) rotate(0)}}
 
+  /* Confetti + floating hearts */
   canvas.confetti{position:fixed;left:0;top:0;pointer-events:none;z-index:2000}
-
   .heart{
     position:absolute;left:50%;top:50%;width:16px;height:16px;
     transform:translate(-50%,-50%) scale(0);opacity:0;pointer-events:none;
@@ -83,6 +86,23 @@
     20%{transform:translate(-50%,-55%) scale(1.08);opacity:1}
     100%{transform:translate(calc(-50% - 120px), -220px) scale(.4);opacity:0}
   }
+
+  /* Clickable heart grid */
+  .heart-grid{
+    display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-top:14px;
+  }
+  .heart-btn{
+    width:56px; height:56px; border-radius:14px; border:1px solid rgba(255,255,255,.22);
+    background:linear-gradient(135deg,#ffffff22,#ffffff10); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform .12s ease, box-shadow .12s ease;
+    box-shadow:0 6px 14px rgba(0,0,0,.18);
+  }
+  .heart-btn:active{ transform:translateY(2px) }
+  .heart-btn svg{ filter:drop-shadow(0 6px 10px rgba(0,0,0,0.25)); }
+  .clicked-message{
+    margin-top:10px; font-size:18px; min-height:1.4em; opacity:.95; text-align:center;
+  }
+
   footer{margin-top:14px;font-size:13px;opacity:0.9}
   a.small{color:#fff;text-decoration:underline;opacity:.95}
 </style>
@@ -104,10 +124,13 @@
   <!-- HIDDEN CONTENT (unlocked after correct password) -->
   <div class="content" id="content">
     <div class="card" role="main">
+      <!-- COUNTDOWN lives here -->
+      <div id="countdown" class="countdown">Loading…</div>
+
       <h1>A tiny surprise for you ✨</h1>
       <p class="lead">Click the button — something pretty will appear.</p>
       <button class="btn" id="openBtn">Open your surprise</button>
-      <footer>Save the file and open it anytime — no internet required.</footer>
+      <footer></footer>
     </div>
 
     <div class="stage" id="stage">
@@ -121,9 +144,10 @@
             </svg>
           </div>
 
-          <div class="message" id="typeMsg">To someone who brightens my days...</div>
-          <div class="sub" id="typeSub">(Click the hearts and enjoy!)</div>
+          <div class="message" id="typeMsg">To someone who always makes me smile...</div>
+          <div class="sub">(Click a heart below 💗)</div>
 
+          <!-- FLOATY FLOWERS (kept) -->
           <div class="flowers" id="flowers">
             <svg class="flower" viewBox="0 0 100 100"><g transform="translate(50 50)"><circle r="20" fill="#FFD77A"/><g fill="#FF9AA2"><path d="M0 -30 A20 20 0 0 1 24 -18 A80 80 0 0 0 0 0 Z"/></g></g></svg>
             <svg class="flower" viewBox="0 0 100 100"><g transform="translate(50 50)"><circle r="18" fill="#B3E5FC"/><g fill="#80DEEA"><path d="M0 -28 A18 18 0 0 1 22 -16 A70 70 0 0 0 0 0 Z"/></g></g></svg>
@@ -131,6 +155,9 @@
             <svg class="flower" viewBox="0 0 100 100"><g transform="translate(50 50)"><circle r="14" fill="#C8E6C9"/><g fill="#A5D6A7"><path d="M0 -24 A14 14 0 0 1 18 -12 A50 50 0 0 0 0 0 Z"/></g></g></svg>
           </div>
 
+          <!-- CLICKABLE HEARTS -->
+          <div class="heart-grid" id="heartGrid" aria-label="Click a heart for a message"></div>
+          <div class="clicked-message" id="clickedMessage"></div>
         </div>
       </div>
     </div>
@@ -138,7 +165,7 @@
 
 <script>
   /* ================== PASSWORD GATE ================== */
-  // CHANGE THIS to your shared secret. (Reminder: client-side gates are for casual privacy.)
+  // CHANGE THIS to your shared secret.
   const CORRECT_PASSWORD = "iloveubah!";
 
   const login = document.getElementById("login");
@@ -147,7 +174,6 @@
   const pwInput = document.getElementById("pw");
   const enterBtn = document.getElementById("enterBtn");
 
-  // show login on load
   login.style.display = "block";
 
   function unlock(){
@@ -155,7 +181,6 @@
     if(val === CORRECT_PASSWORD){
       login.style.display = "none";
       content.style.display = "block";
-      // focus the main button for a nice flow
       document.getElementById('openBtn')?.focus();
     } else {
       msg.textContent = "Incorrect password 💔";
@@ -163,6 +188,32 @@
   }
   enterBtn.addEventListener('click', unlock);
   pwInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') unlock(); });
+
+  /* ================== COUNTDOWN TO NOV 26 ================== */
+  // Auto-rolls to next year if Nov 26 has already passed.
+  const countdownEl = document.getElementById('countdown');
+  function nextNov26(){
+    const now = new Date();
+    const year = now.getMonth() > 10 || (now.getMonth() === 10 && now.getDate() > 26)
+      ? now.getFullYear() + 1
+      : now.getFullYear();
+    return new Date(year, 10, 26, 0, 0, 0); // month is 0-indexed (10 = November)
+  }
+  let target = nextNov26();
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function updateCountdown(){
+    const now = new Date();
+    if(now >= target){ target = nextNov26(); }
+    const diff = target - now;
+    const d = Math.floor(diff / (1000*60*60*24));
+    const h = Math.floor((diff / (1000*60*60)) % 24);
+    const m = Math.floor((diff / (1000*60)) % 60);
+    const s = Math.floor((diff / 1000) % 60);
+    countdownEl.textContent = `Countdown to Nov 26: ${d} days ${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
 
   /* ================== SURPRISE CONTENT ================== */
   const openBtn = document.getElementById('openBtn');
@@ -205,7 +256,7 @@
     for(let i=particles.length-1;i>=0;i--){
       const p = particles[i];
       p.life--;
-      p.vy += 0.15; // gravity
+      p.vy += 0.15;
       p.x += p.vx;
       p.y += p.vy;
       p.angle += p.vx*2;
@@ -224,8 +275,8 @@
   // typewriter effect
   const messageEl = document.getElementById('typeMsg');
   const lines = [
-    "To someone who brightens my days...",
-    "You make ordinary moments feel magical.",
+    "To someone who always makes me smile...",
+    "Someone who always makes me feel so loved.",
     "This little surprise is just for you 💖"
   ];
   function runType(){
@@ -246,7 +297,6 @@
     step();
   }
 
-  // guard: if content isn't shown yet, openBtn is null.
   if(openBtn){
     openBtn.addEventListener('click',()=>{
       stage.classList.add('show');
@@ -254,7 +304,8 @@
       const x = rect.left + rect.width/2;
       const y = rect.top + rect.height/2;
       spawnConfetti(x,y,48);
-      // pop hearts
+
+      // ambient floating hearts
       for(let k=0;k<10;k++){
         const h = document.createElement('div');
         h.className='heart';
@@ -264,6 +315,7 @@
         modal.appendChild(h);
         setTimeout(()=>h.remove(),1400 + Math.random()*400);
       }
+
       runType();
       modal.focus?.();
       spawnConfetti(window.innerWidth/2, window.innerHeight/2, 120);
@@ -271,14 +323,51 @@
   }
 
   if(closeBtn){
-    closeBtn.addEventListener('click', ()=>{
-      stage.classList.remove('show');
-    });
+    closeBtn.addEventListener('click', ()=>{ stage.classList.remove('show'); });
   }
   window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') stage.classList.remove('show'); });
 
-  // small autoplay confetti loop for first 2s
   setTimeout(()=>spawnConfetti(window.innerWidth/2, 120, 30), 600);
+
+  /* ================== CLICKABLE HEARTS W/ CUSTOM SENTENCES ================== */
+  // EDIT THESE LINES: put any sentences you want. One sentence per heart.
+  const heartMessages = [
+    "Your eyes are so beautiful! I hope our kids get them.",
+    "I love when you laugh.",
+    "Thank you for always believing in me.",
+    "You make even the most shitty days worth it.",
+    "I can’t wait until I get to see you again!",
+    "I’m proud of you. Always.",
+    "I can't wait to cuddle with you again!",
+    "Don't forget to tell shadow I love him so much!"
+  ];
+
+  const heartGrid = document.getElementById('heartGrid');
+  const clickedMessage = document.getElementById('clickedMessage');
+
+  function renderHearts(){
+    heartGrid.innerHTML = "";
+    heartMessages.forEach((text, idx)=>{
+      const btn = document.createElement('button');
+      btn.className = 'heart-btn';
+      btn.setAttribute('aria-label', `Message ${idx+1}`);
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+          <path fill="#ff6b8a" d="M12 21s-7-4.7-9.2-7.1C-0.4 10.5 3.9 5 8.8 7.5 10.5 8.5 12 10.1 12 10.1s1.5-1.6 3.2-2.6C20.1 5 24.4 10.5 21.2 13.9 19 16.3 12 21 12 21z"/>
+        </svg>`;
+      btn.addEventListener('click',(e)=>{
+        clickedMessage.textContent = text;
+        // small confetti burst at click
+        const rect = modal.getBoundingClientRect();
+        const x = (e.clientX ?? (rect.left + rect.width/2));
+        const y = (e.clientY ?? (rect.top + rect.height/2));
+        spawnConfetti(x,y,24);
+      });
+      heartGrid.appendChild(btn);
+    });
+  }
+  renderHearts();
 </script>
 </body>
 </html>
+
